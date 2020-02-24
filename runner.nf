@@ -100,7 +100,8 @@ process runTmerge1 {
     
     shell:
     '''
-    /usr/bin/time -f "%e" -o !{inputGFF.simpleName}.time.tmerge1.txt perl !{tmerge1_path}/tmerge !{inputGFF} > !{inputGFF.simpleName}.output.tmerge1.gff
+    PATH="$PATH:!{julien_utils_path}"
+    /usr/bin/time -f "%e" -o !{inputGFF.simpleName}.time.tmerge1.txt perl !{tmerge1_path}/tmerge !{inputGFF} | sortgff > !{inputGFF.simpleName}.output.tmerge1.gff
     '''
 }
 
@@ -153,7 +154,9 @@ process runStringTie2 {
 
     shell:
     '''
-    /usr/bin/time -f "%e" -o !{inputBAM.simpleName}.time.stringtie2.txt time !{stringtie2_path}/stringtie -L -f 0 !{inputBAM} -o !{inputBAM.simpleName}.output.stringtie2.gff
+    PATH="$PATH:!{julien_utils_path}"
+    /usr/bin/time -f "%e" -o !{inputBAM.simpleName}.time.stringtie2.txt time !{stringtie2_path}/stringtie -L -f 0 !{inputBAM} -o !{inputBAM.simpleName}.output.stringtie2.tmp.gff
+    cat !{inputBAM.simpleName}.output.stringtie2.tmp.gff | sortgff > !{inputBAM.simpleName}.output.stringtie2.gff
     '''
 }
 
@@ -185,7 +188,9 @@ process bedToGFF {
 
     shell:
     '''
-    cat !{inputBED} | awk -f !{julien_utils_path}bed12fields2gff.awk > !{inputBED.baseName}.gff
+    PATH="$PATH:!{julien_utils_path}"
+
+    cat !{inputBED} | sortgff | awk -f !{julien_utils_path}bed12fields2gff.awk > !{inputBED.baseName}.gff
     '''
 }
 
