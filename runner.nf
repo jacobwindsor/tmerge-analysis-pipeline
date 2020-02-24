@@ -46,7 +46,7 @@ process copyInputFiles {
     shell:
     '''
     echo !{x.nickname}
-    zcat "!{x.path}" | head -n 100 > !{x.nickname}.input.gff
+    zcat "!{x.path}" > !{x.nickname}.input.gff
     '''    
 }
 
