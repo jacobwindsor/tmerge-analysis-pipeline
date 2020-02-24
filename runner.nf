@@ -1,5 +1,9 @@
 nextflow.preview.dsl=2
 
+include runGFFCompare as oneVsTwo from './gffcompare'
+include runGFFCompare as twoVsFLAIR from './gffcompare'
+
+
 /*
 * tmerge 2.0 testing pipeline
 *
@@ -51,7 +55,7 @@ process runTmerge1 {
     path inputGFF
 
     memory '30 GB'
-    time '26h'
+    time '25h'
     publishDir "$output_dir"
 
     output:
@@ -118,6 +122,21 @@ process gffToBED {
     '''
 }
 
+process bedToGFF {
+    input:
+    path inputBED
+
+    publishDir "$output_dir"
+
+    output:
+    path '*.gff'
+
+    shell:
+    '''
+    cat !{inputBED} | awk -f !{julien_utils_path}bed12fields2gff.awk > !{inputBED.baseName}.gff
+    '''
+}
+
 process recordTime {
     input:
     path tmerge2_time
@@ -132,32 +151,18 @@ process recordTime {
     '''
 }
 
-process runGFFCompare {
-    input:
-    path inputGFF
-    path referenceGFF
-
-    publishDir "$output_dir"
-
-    output:
-    path '*.gffcompare*'
-
-    shell:
-    '''
-    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -o !{inputGFF.simpleName}.!{inputGFF.baseName.split("\\\\.")[2]}_vs_!{referenceGFF.baseName.split("\\\\.")[2]}.gffcompare !{inputGFF} -r !{referenceGFF}
-    '''
-}
-
 workflow runTools {
     take: inputGFFs
     main:
         tmerge1 = runTmerge1(inputGFFs)
-        tmerge2 = runTmerge2(inputGFFs)
-        runGFFCompare(tmerge2.output, tmerge1.output)
-    
+        tmerge2 = runTmerge2(inputGFFs)    
         recordTime(tmerge2.time)
+        oneVsTwo(tmerge2.output, tmerge1.output)
 
         flair = gffToBED(inputGFFs) | runFLAIR
+        flairGFF = bedToGFF(flair.output)
+
+        twoVsFLAIR(tmerge2.output, flairGFF)
     emit:
         tmerge1.output.mix(tmerge2.output).mix(flair.output)
 }
