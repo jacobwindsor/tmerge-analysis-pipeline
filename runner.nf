@@ -2,6 +2,9 @@ nextflow.preview.dsl=2
 
 /*
 * tmerge 2.0 testing pipeline
+*
+* ALL FILE NAMES MUST FOLLOW THIS CONVENTION:
+* [nickname].[output|input|time].[tool].[ext]
 */
 
 /*
@@ -9,6 +12,7 @@ nextflow.preview.dsl=2
 */
 tmerge2_path = "/users/rg/jwindsor/tmerge/2.0"
 tmerge1_path = "/users/rg/jlagarde/julien_utils"
+flair_path = "/users/rg/jwindsor/flair"
 julien_utils_path = "/users/rg/jlagarde/julien_utils/"
 venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
 output_dir = "/users/rg/jwindsor/tests/tmerge/results"
@@ -38,7 +42,7 @@ process copyInputFiles {
     shell:
     '''
     echo !{x.nickname}
-    zcat "!{x.path}" > !{x.nickname}.input.gff
+    zcat "!{x.path}" | head -n 100 > !{x.nickname}.input.gff
     '''    
 }
 
@@ -47,6 +51,7 @@ process runTmerge1 {
     path inputGFF
 
     memory '30 GB'
+    time '26h'
     publishDir "$output_dir"
 
     output:
@@ -79,9 +84,26 @@ process runTmerge2 {
     '''
 }
 
-process outputToBED {
+process runFLAIR {
     input:
-    path mergedOutput
+    path inputBED
+
+    memory '30GB'
+    publishDir "$output_dir"
+
+    output:
+        path '*.output.flair.bed', emit: output
+        path '*.time.flair.txt', emit: time
+
+    shell:
+        '''
+        /usr/bin/time -f "%e" -o !{inputBED.simpleName}.time.flair.txt time python !{flair_path}/bin/collapse_isoforms_precise.py -q !{inputBED} -o !{inputBED.simpleName}.output.flair.bed
+        '''
+}
+
+process gffToBED {
+    input:
+    path inputGFF
 
     publishDir "$output_dir"
 
@@ -92,24 +114,7 @@ process outputToBED {
     '''
     PATH="$PATH:!{julien_utils_path}"
 
-    cat !{mergedOutput} | gff2bed_full.pl -| sortbed > !{mergedOutput.baseName}.bed
-    '''
-}
-
-process oneVsTwo {
-    input:
-    path tmerge1Output
-    path tmerge2Output
-
-    publishDir "$output_dir"
-
-    output:
-    path '*.gffcompare*'
-
-
-    shell:
-    '''
-    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -o !{tmerge1Output.simpleName}.tmerge2_vs_tmerge1.gffcompare !{tmerge2Output} -r !{tmerge1Output}
+    cat !{inputGFF} | gff2bed_full.pl -| sortbed > !{inputGFF.baseName}.bed
     '''
 }
 
@@ -127,14 +132,44 @@ process recordTime {
     '''
 }
 
+process runGFFCompare {
+    input:
+    path inputGFF
+    path referenceGFF
+
+    publishDir "$output_dir"
+
+    output:
+    path '*.gffcompare*'
+
+    shell:
+    '''
+    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -o !{inputGFF.simpleName}.!{inputGFF.baseName.split("\\\\.")[2]}_vs_!{referenceGFF.baseName.split("\\\\.")[2]}.gffcompare !{inputGFF} -r !{referenceGFF}
+    '''
+}
+
+workflow runTools {
+    take: inputGFFs
+    main:
+        tmerge1 = runTmerge1(inputGFFs)
+        tmerge2 = runTmerge2(inputGFFs)
+        runGFFCompare(tmerge2.output, tmerge1.output)
+    
+        recordTime(tmerge2.time)
+
+        flair = gffToBED(inputGFFs) | runFLAIR
+    emit:
+        tmerge1.output.mix(tmerge2.output).mix(flair.output)
+}
+
+workflow convertToBed {
+    take: inputs
+    main:
+        gffToBED(inputs)
+}
+
 workflow {
     inputs = copyInputFiles(inputFiles)
-    
-    tmerge1 = runTmerge1(inputs)
-    tmerge2 = runTmerge2(inputs)
-    recordTime(tmerge2.time)
-
-    oneVsTwo(tmerge1.output, tmerge2.output)
-    
-    tmerge1.output.mix(tmerge2.output) | outputToBED
+    outputs = runTools(inputs)
+    outputs.filter( ~/.*\.gff$/ ) | convertToBed
 }
