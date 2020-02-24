@@ -1,8 +1,12 @@
 nextflow.preview.dsl=2
 
-include runGFFCompare as oneVsTwo from './gffcompare'
-include runGFFCompare as twoVsFLAIR from './gffcompare'
-include runGFFCompare as twoVsStringTie2 from './gffcompare'
+
+include processForSIRVs as processTmerge2SIRVs from './utils'
+include processForSIRVs as processFLAIRSIRVs from './utils'
+include processForSIRVs as processStringtie2SIRVs from './utils'
+include runGFFCompare as oneVsTwo from './utils'
+include runGFFCompare as twoVsFLAIR from './utils'
+include runGFFCompare as twoVsStringTie2 from './utils'
 
 
 
@@ -10,7 +14,7 @@ include runGFFCompare as twoVsStringTie2 from './gffcompare'
 * tmerge 2.0 testing pipeline
 *
 * ALL FILE NAMES MUST FOLLOW THIS CONVENTION:
-* [nickname].[output|input|time].[tool].[ext]
+* [nickname].[output|input|time].[tool].[sirv?].[ext]
 */
 
 /*
@@ -206,16 +210,19 @@ workflow runTools {
         inputBAMs = inputFiles.filter( ~/.*\.bam$/ )
         
         tmerge1 = runTmerge1(inputGFFs)
-        tmerge2 = runTmerge2(inputGFFs)    
+        tmerge2 = runTmerge2(inputGFFs)
+        tmerge2_sirvs = tmerge2.output | processTmerge2SIRVs
         recordTime(tmerge2.time)
+        // NOTE: All comparisons are done with SIRVs except tmerge1 vs tmerge2
         oneVsTwo(tmerge2.output, tmerge1.output)
 
         flair = gffToBED(inputGFFs) | runFLAIR
-        flairGFF = bedToGFF(flair.output)
-        twoVsFLAIR(tmerge2.output, flairGFF)
+        flairGFF = bedToGFF(flair.output) | processFLAIRSIRVs
+        twoVsFLAIR(tmerge2_sirvs, flairGFF)
 
         stringtie2 = runStringTie2(inputBAMs)
-        twoVsStringTie2(tmerge2.output, stringtie2.output)
+        stringtie2GFF = stringtie2.output | processStringtie2SIRVs
+        twoVsStringTie2(tmerge2_sirvs, stringtie2GFF)
     emit:
         tmerge1.output.mix(tmerge2.output).mix(flair.output)
 }
