@@ -2,6 +2,8 @@ nextflow.preview.dsl=2
 
 include runGFFCompare as oneVsTwo from './gffcompare'
 include runGFFCompare as twoVsFLAIR from './gffcompare'
+include runGFFCompare as twoVsStringTie2 from './gffcompare'
+
 
 
 /*
@@ -17,9 +19,11 @@ include runGFFCompare as twoVsFLAIR from './gffcompare'
 tmerge2_path = "/users/rg/jwindsor/tmerge/2.0"
 tmerge1_path = "/users/rg/jlagarde/julien_utils"
 flair_path = "/users/rg/jwindsor/flair"
+stringtie2_path = "/users/rg/jwindsor/stringtie2"
 julien_utils_path = "/users/rg/jlagarde/julien_utils/"
+read_mapping_path = "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/readMapping/"
 venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
-output_dir = "/users/rg/jwindsor/tests/tmerge/results"
+output_dir = "/users/rg/jwindsor/tests/tmerge/results_mock"
 cache_dir = "/users/rg/jwindsor/tests/tmerge/cache"
 
 
@@ -28,10 +32,10 @@ inputFiles = Channel.fromList([
         "nickname": "standard",
         "path": "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Brain01Rep1.strandedHCGMs.gff.gz"
     ],
-    [
-        "nickname": "tricky",
-        "path": "/users/project/gencode_006070_no_backup/jlagarde/lncRNACapture_phase3/mappings/strandGffs/ont:Cshl:CapTrap:Corr0_HpreCap_0+_Heart01Rep1.stranded.gff.gz"
-    ]
+    // [
+    //     "nickname": "tricky",
+    //     "path": "/users/project/gencode_006070_no_backup/jlagarde/lncRNACapture_phase3/mappings/strandGffs/ont:Cshl:CapTrap:Corr0_HpreCap_0+_Heart01Rep1.stranded.gff.gz"
+    // ]
 ])
 
 process copyInputFiles {
@@ -48,6 +52,34 @@ process copyInputFiles {
     echo !{x.nickname}
     zcat "!{x.path}" > !{x.nickname}.input.gff
     '''    
+}
+
+process getBAM {
+    input:
+    val x
+
+    publishDir "$output_dir"
+
+    output:
+    path '*.input.bam'
+    
+    shell:
+    '''
+    PATH="$PATH:!{julien_utils_path}"
+    module load SAMtools/1.5-foss-2016b;
+
+    # select all read IDs (transcript_id's) from GTF:
+    zcat !{x.path} | extractGffAttributeValue.pl transcript_id | sort|uniq > tmp.ids
+    
+    # extract SAM header from the BAM file (if you don't, the subsequent SAM->BAM conversion will not work):
+    samtools view -H !{read_mapping_path}$(basename !{x.path} .strandedHCGMs.gff.gz).bam > tmp.sam
+
+    # extract SAM alignment records and filter them based on your list of read IDs.
+    samtools view "!{read_mapping_path}$(basename !{x.path} .strandedHCGMs.gff.gz).bam" | fgrep -w -f tmp.ids >> tmp.sam
+
+    # convert SAM to BAM:
+    samtools view -b tmp.sam > !{x.nickname}.input.bam
+    '''
 }
 
 process runTmerge1 {
@@ -105,6 +137,22 @@ process runFLAIR {
         '''
 }
 
+process runStringTie2 {
+    input:
+    path inputBAM
+
+    publishDir "$output_dir"
+
+    output:
+        path '*.output.stringtie2.gff', emit: output
+        path '*.time.stringtie2.txt', emit: time
+
+    shell:
+    '''
+    /usr/bin/time -f "%e" -o !{inputBAM.simpleName}.time.stringtie2.txt time !{stringtie2_path}/stringtie -L -f 0 !{inputBAM} -o !{inputBAM.simpleName}.output.stringtie2.gff
+    '''
+}
+
 process gffToBED {
     input:
     path inputGFF
@@ -152,8 +200,11 @@ process recordTime {
 }
 
 workflow runTools {
-    take: inputGFFs
+    take: inputFiles
     main:
+        inputGFFs = inputFiles.filter(~/.*\.gff$/ )
+        inputBAMs = inputFiles.filter( ~/.*\.bam$/ )
+        
         tmerge1 = runTmerge1(inputGFFs)
         tmerge2 = runTmerge2(inputGFFs)    
         recordTime(tmerge2.time)
@@ -161,10 +212,21 @@ workflow runTools {
 
         flair = gffToBED(inputGFFs) | runFLAIR
         flairGFF = bedToGFF(flair.output)
-
         twoVsFLAIR(tmerge2.output, flairGFF)
+
+        stringtie2 = runStringTie2(inputBAMs)
+        twoVsStringTie2(tmerge2.output, stringtie2.output)
     emit:
         tmerge1.output.mix(tmerge2.output).mix(flair.output)
+}
+
+workflow tmerge1 {
+    take: inputGFFs
+    main:
+        tmerge1 = runTmerge1(inputGFFs)
+        tmerge2 = runTmerge2(inputGFFs)    
+        recordTime(tmerge2.time)
+        oneVsTwo(tmerge2.output, tmerge1.output)
 }
 
 workflow convertToBed {
@@ -174,7 +236,7 @@ workflow convertToBed {
 }
 
 workflow {
-    inputs = copyInputFiles(inputFiles)
+    inputs = copyInputFiles(inputFiles).mix(getBAM(inputFiles))
     outputs = runTools(inputs)
     outputs.filter( ~/.*\.gff$/ ) | convertToBed
 }
