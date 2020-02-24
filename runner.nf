@@ -27,7 +27,7 @@ stringtie2_path = "/users/rg/jwindsor/stringtie2"
 julien_utils_path = "/users/rg/jlagarde/julien_utils/"
 read_mapping_path = "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/readMapping/"
 venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
-output_dir = "/users/rg/jwindsor/tests/tmerge/results_mock"
+output_dir = "/users/rg/jwindsor/tests/tmerge/results"
 cache_dir = "/users/rg/jwindsor/tests/tmerge/cache"
 
 
@@ -36,10 +36,10 @@ inputFiles = Channel.fromList([
         "nickname": "standard",
         "path": "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Brain01Rep1.strandedHCGMs.gff.gz"
     ],
-    // [
-    //     "nickname": "tricky",
-    //     "path": "/users/project/gencode_006070_no_backup/jlagarde/lncRNACapture_phase3/mappings/strandGffs/ont:Cshl:CapTrap:Corr0_HpreCap_0+_Heart01Rep1.stranded.gff.gz"
-    // ]
+    [
+        "nickname": "tricky",
+        "path": "/users/project/gencode_006070_no_backup/jlagarde/lncRNACapture_phase3/mappings/strandGffs/ont:Cshl:CapTrap:Corr0_HpreCap_0+_Heart01Rep1.stranded.gff.gz"
+    ]
 ])
 
 process copyInputFiles {

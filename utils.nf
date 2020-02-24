@@ -1,4 +1,4 @@
-output_dir = "/users/rg/jwindsor/tests/tmerge/results_mock"
+output_dir = "/users/rg/jwindsor/tests/tmerge/results"
 
 process runGFFCompare {
     input:
