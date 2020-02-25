@@ -68,22 +68,23 @@ process getBAM {
     path '*.input.bam'
     
     shell:
-    '''
-    PATH="$PATH:!{julien_utils_path}"
-    module load SAMtools/1.5-foss-2016b;
+    if (x.nickname == "standard")
+        '''
+        PATH="$PATH:!{julien_utils_path}"
+        module load SAMtools/1.5-foss-2016b;
 
-    # select all read IDs (transcript_id's) from GTF:
-    zcat !{x.path} | extractGffAttributeValue.pl transcript_id | sort|uniq > tmp.ids
-    
-    # extract SAM header from the BAM file (if you don't, the subsequent SAM->BAM conversion will not work):
-    samtools view -H !{read_mapping_path}$(basename !{x.path} .strandedHCGMs.gff.gz).bam > tmp.sam
+        # select all read IDs (transcript_id's) from GTF:
+        zcat !{x.path} | extractGffAttributeValue.pl transcript_id | sort|uniq > tmp.ids
+        
+        # extract SAM header from the BAM file (if you don't, the subsequent SAM->BAM conversion will not work):
+        samtools view -H !{read_mapping_path}$(basename !{x.path} .strandedHCGMs.gff.gz).bam > tmp.sam
 
-    # extract SAM alignment records and filter them based on your list of read IDs.
-    samtools view "!{read_mapping_path}$(basename !{x.path} .strandedHCGMs.gff.gz).bam" | fgrep -w -f tmp.ids >> tmp.sam
+        # extract SAM alignment records and filter them based on your list of read IDs.
+        samtools view "!{read_mapping_path}$(basename !{x.path} .strandedHCGMs.gff.gz).bam" | fgrep -w -f tmp.ids >> tmp.sam
 
-    # convert SAM to BAM:
-    samtools view -b tmp.sam > !{x.nickname}.input.bam
-    '''
+        # convert SAM to BAM:
+        samtools view -b tmp.sam > !{x.nickname}.input.bam
+        '''
 }
 
 process runTmerge1 {
@@ -155,7 +156,7 @@ process runStringTie2 {
     shell:
     '''
     PATH="$PATH:!{julien_utils_path}"
-    /usr/bin/time -f "%e" -o !{inputBAM.simpleName}.time.stringtie2.txt time !{stringtie2_path}/stringtie -L -f 0 !{inputBAM} -o !{inputBAM.simpleName}.output.stringtie2.tmp.gff
+    /usr/bin/time -f "%e" -o !{inputBAM.simpleName}.time.stringtie2.txt time !{stringtie2_path}/stringtie -L -f 0 -a 1 !{inputBAM} -o !{inputBAM.simpleName}.output.stringtie2.tmp.gff
     cat !{inputBAM.simpleName}.output.stringtie2.tmp.gff | sortgff > !{inputBAM.simpleName}.output.stringtie2.gff
     '''
 }
@@ -229,16 +230,7 @@ workflow runTools {
         stringtie2GFF = stringtie2.output | processStringtie2SIRVs
         twoVsStringTie2(tmerge2_sirvs, stringtie2GFF)
     emit:
-        tmerge1.output.mix(tmerge2.output).mix(flair.output)
-}
-
-workflow tmerge1 {
-    take: inputGFFs
-    main:
-        tmerge1 = runTmerge1(inputGFFs)
-        tmerge2 = runTmerge2(inputGFFs)    
-        recordTime(tmerge2.time)
-        oneVsTwo(tmerge2.output, tmerge1.output)
+        tmerge1.output.mix(tmerge2.output).mix(flair.output).mix(stringtie2.output)
 }
 
 workflow convertToBed {
@@ -248,7 +240,8 @@ workflow convertToBed {
 }
 
 workflow {
-    inputs = copyInputFiles(inputFiles).mix(getBAM(inputFiles))
+    inputs = copyInputFiles(inputFiles)
+        .mix(getBAM(inputFiles.filter { x -> x.nickname == "standard" })) // Only run for standard. Tricky doesnt work for getting BAM
     outputs = runTools(inputs)
     outputs.filter( ~/.*\.gff$/ ) | convertToBed
 }
