@@ -63,6 +63,7 @@ process getBAM {
     val x
 
     publishDir "$output_dir"
+    memory "30G"
 
     output:
     path '*.input.bam'
