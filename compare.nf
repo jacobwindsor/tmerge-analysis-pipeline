@@ -8,10 +8,7 @@ include runGFFCompare as oneVsTwo from './utils'
 include runGFFCompare as FLAIRCompare from './utils'
 include runGFFCompare as StringTie2Compare from './utils'
 include runGFFCompare as tmerge2Compare from './utils'
-
-
-
-
+include gffToBED from './utils'
 /*
 * tmerge 2.0 testing pipeline
 *
@@ -20,18 +17,20 @@ include runGFFCompare as tmerge2Compare from './utils'
 */
 
 /*
-* Configuration options
+* Configuration options. 
 */
+// Options that are only used in this context
 tmerge2_path = "/users/rg/jwindsor/tmerge/2.0"
 tmerge1_path = "/users/rg/jlagarde/julien_utils"
 flair_path = "/users/rg/jwindsor/flair"
 stringtie2_path = "/users/rg/jwindsor/stringtie2"
-julien_utils_path = "/users/rg/jlagarde/julien_utils/"
 read_mapping_path = "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/readMapping/"
 sirvs_path = "/users/rg/jlagarde/genomes/lexogen_SIRVs/SIRV_Set1_Lot00141_Sequences_181206a/SIRVome_isoforms_Lot00141_C_181206a.gtf.unix.corrected.gene_types.gtf"
 venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
-output_dir = "/users/rg/jwindsor/tests/tmerge/results"
-cache_dir = "/users/rg/jwindsor/tests/tmerge/cache"
+
+// Options used by included files and this context
+params.output_dir = "/users/rg/jwindsor/tests/tmerge/results/compare"
+params.julien_utils_path = "/users/rg/jlagarde/julien_utils/"
 
 
 inputFiles = Channel.fromList([
@@ -49,7 +48,7 @@ process copyInputFiles {
     input:
     val x
 
-    publishDir "$output_dir"
+    publishDir "$params.output_dir"
 
     output:
     path '*.input.gff'
@@ -65,7 +64,7 @@ process getBAM {
     input:
     val x
 
-    publishDir "$output_dir"
+    publishDir "$params.output_dir"
     memory "30G"
 
     output:
@@ -74,7 +73,7 @@ process getBAM {
     shell:
     if (x.nickname == "standard")
         '''
-        PATH="$PATH:!{julien_utils_path}"
+        PATH="$PATH:!{params.julien_utils_path}"
         module load SAMtools/1.5-foss-2016b;
 
         # select all read IDs (transcript_id's) from GTF:
@@ -97,7 +96,7 @@ process runTmerge1 {
 
     memory '30 GB'
     time '25h'
-    publishDir "$output_dir"
+    publishDir "$params.output_dir"
 
     output:
         path '*.output.tmerge1.gff', emit: output
@@ -105,7 +104,7 @@ process runTmerge1 {
     
     shell:
     '''
-    PATH="$PATH:!{julien_utils_path}"
+    PATH="$PATH:!{params.julien_utils_path}"
     /usr/bin/time -f "%e" -o !{inputGFF.simpleName}.time.tmerge1.txt perl !{tmerge1_path}/tmerge !{inputGFF} | sortgff > !{inputGFF.simpleName}.output.tmerge1.gff
     '''
 }
@@ -115,7 +114,7 @@ process runTmerge2 {
     path inputGFF
 
     memory '30 GB'
-    publishDir "$output_dir"
+    publishDir "$params.output_dir"
 
     output:
         path '*.output.tmerge2.gff', emit: output
@@ -135,7 +134,7 @@ process runFLAIR {
     path inputBED
 
     memory '30GB'
-    publishDir "$output_dir"
+    publishDir "$params.output_dir"
 
     output:
         path '*.output.flair.bed', emit: output
@@ -151,7 +150,7 @@ process runStringTie2 {
     input:
     path inputBAM
 
-    publishDir "$output_dir"
+    publishDir "$params.output_dir"
 
     output:
         path '*.output.stringtie2.gff', emit: output
@@ -159,26 +158,9 @@ process runStringTie2 {
 
     shell:
     '''
-    PATH="$PATH:!{julien_utils_path}"
+    PATH="$PATH:!{params.julien_utils_path}"
     /usr/bin/time -f "%e" -o !{inputBAM.simpleName}.time.stringtie2.txt time !{stringtie2_path}/stringtie -L -f 0 -a 1 !{inputBAM} -o !{inputBAM.simpleName}.output.stringtie2.tmp.gff
     cat !{inputBAM.simpleName}.output.stringtie2.tmp.gff | sortgff > !{inputBAM.simpleName}.output.stringtie2.gff
-    '''
-}
-
-process gffToBED {
-    input:
-    path inputGFF
-
-    publishDir "$output_dir"
-
-    output:
-    path '*.bed'
-
-    shell:
-    '''
-    PATH="$PATH:!{julien_utils_path}"
-
-    cat !{inputGFF} | gff2bed_full.pl -| sortbed > !{inputGFF.baseName}.bed
     '''
 }
 
@@ -186,16 +168,16 @@ process bedToGFF {
     input:
     path inputBED
 
-    publishDir "$output_dir"
+    publishDir "$params.output_dir"
 
     output:
     path '*.gff'
 
     shell:
     '''
-    PATH="$PATH:!{julien_utils_path}"
+    PATH="$PATH:!{params.julien_utils_path}"
 
-    cat !{inputBED} | sortgff | awk -f !{julien_utils_path}bed12fields2gff.awk > !{inputBED.baseName}.gff
+    cat !{inputBED} | sortgff | awk -f !{params.julien_utils_path}bed12fields2gff.awk > !{inputBED.baseName}.gff
     '''
 }
 
@@ -209,7 +191,7 @@ process recordTime {
 
     TMERGE2_TIME="$(cat !{tmerge2_time} | tr -d '\n')"
 
-    echo "$LAST_COMMIT_ID,!{tmerge2_time.simpleName},$TMERGE2_TIME" >> !{output_dir}/tmerge2_time_stats.csv
+    echo "$LAST_COMMIT_ID,!{tmerge2_time.simpleName},$TMERGE2_TIME" >> !{params.output_dir}/tmerge2_time_stats.csv
     '''
 }
 

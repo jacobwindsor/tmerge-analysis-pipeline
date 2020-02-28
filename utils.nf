@@ -1,11 +1,13 @@
-output_dir = "/users/rg/jwindsor/tests/tmerge/results"
+params.output_dir = "/users/rg/jwindsor/tests/tmerge/results"
+params.julien_utils_path = "/users/rg/jlagarde/julien_utils/"
+
 
 process runGFFCompare {
     input:
     path input
     path reference
 
-    publishDir "$output_dir"
+    publishDir "$params.output_dir"
 
     output:
     path '*.gffcompare*'
@@ -20,7 +22,7 @@ process processForSIRVs {
     input:
     path inputGFF
 
-    publishDir "$output_dir"
+    publishDir "$params.output_dir"
 
     output:
     path '*.gff'
@@ -31,3 +33,19 @@ process processForSIRVs {
     '''
 }
 
+process gffToBED {
+    input:
+    path inputGFF
+
+    publishDir "$params.output_dir"
+
+    output:
+    path '*.bed'
+
+    shell:
+    '''
+    PATH="$PATH:!{params.julien_utils_path}"
+
+    cat !{inputGFF} | gff2bed_full.pl -| sortbed > !{inputGFF.baseName}.bed
+    '''
+}
