@@ -1,14 +1,5 @@
 nextflow.preview.dsl=2
 
-
-include processForSIRVs as processTmerge2SIRVs from './utils'
-include processForSIRVs as processFLAIRSIRVs from './utils'
-include processForSIRVs as processStringtie2SIRVs from './utils'
-include runGFFCompare as oneVsTwo from './utils'
-include runGFFCompare as FLAIRCompare from './utils'
-include runGFFCompare as StringTie2Compare from './utils'
-include runGFFCompare as tmerge2Compare from './utils'
-include gffToBED from './utils'
 /*
 * tmerge 2.0 testing pipeline
 *
@@ -32,6 +23,14 @@ venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
 params.output_dir = "/users/rg/jwindsor/tests/tmerge/results/compare"
 params.julien_utils_path = "/users/rg/jlagarde/julien_utils/"
 
+include processForSIRVs as processTmerge2SIRVs from './utils'
+include processForSIRVs as processFLAIRSIRVs from './utils'
+include processForSIRVs as processStringtie2SIRVs from './utils'
+include runGFFCompare as oneVsTwo from './utils'
+include runGFFCompare as FLAIRCompare from './utils'
+include runGFFCompare as StringTie2Compare from './utils'
+include runGFFCompare as tmerge2Compare from './utils'
+include gffToBED from './utils'
 
 inputFiles = Channel.fromList([
     [

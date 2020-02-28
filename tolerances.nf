@@ -1,9 +1,5 @@
 nextflow.preview.dsl=2
 
-
-include processForSIRVs from './utils'
-include gffToBED from './utils'
-
 tmerge1_path = "/users/rg/jlagarde/julien_utils"
 tmerge2_path = "/users/rg/jwindsor/tmerge/2.0"
 sirvs_path = "/users/rg/jlagarde/genomes/lexogen_SIRVs/SIRV_Set1_Lot00141_Sequences_181206a/SIRVome_isoforms_Lot00141_C_181206a.gtf.unix.corrected.gene_types.gtf"
@@ -12,6 +8,9 @@ venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
 params.julien_utils_path = "/users/rg/jlagarde/julien_utils/"
 params.output_dir = "/users/rg/jwindsor/tests/tmerge/results/tolerances"
 
+
+include processForSIRVs from './utils'
+include gffToBED from './utils'
 
 inputFiles = Channel.from("/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Brain01Rep1.strandedHCGMs.gff.gz")
 tolerances = [0,1,2,3,4,5,6,7,8,9,10,11,12,13]
