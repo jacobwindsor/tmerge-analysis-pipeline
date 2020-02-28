@@ -13,7 +13,9 @@ include processForSIRVs from './utils'
 include gffToBED from './utils'
 
 inputFiles = Channel.from("/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Brain01Rep1.strandedHCGMs.gff.gz")
-tolerances = [0,1,2,3,4,5,6,7,8,9,10,11,12,13]
+tolerances = [0,2,4,6,8,9,10,11,12,13]
+min_reads = [0,1,2,3,4]
+
 process copyInputFiles {
     input:
     val x
@@ -43,7 +45,7 @@ process runTmerge2 {
     module load Python
     source !{venv}
 
-    python !{tmerge2_path}/tmerge.py -i !{input_tolerance_pair[0]} -o output.tmerge2.tolerance_!{input_tolerance_pair[1]}.gff -t !{input_tolerance_pair[1]}
+    python !{tmerge2_path}/tmerge.py -i !{input_tolerance_pair[0]} -o output.tmerge2.tolerance_!{input_tolerance_pair[1]}.support_!{input_tolerance_pair[2]}.gff -t !{input_tolerance_pair[1]} -f !{input_tolerance_pair[2]}
     '''
 }
 
@@ -60,7 +62,7 @@ process runTmerge1 {
     '''
     PATH="$PATH:!{params.julien_utils_path}"
 
-    perl !{tmerge1_path}/tmerge --exonOverhangTolerance=!{input_tolerance_pair[1]} !{input_tolerance_pair[0]} | sortgff > output.tmerge1.tolerance_!{input_tolerance_pair[1]}.gff
+    perl !{tmerge1_path}/tmerge --exonOverhangTolerance=!{input_tolerance_pair[1]} --minReadSupport=!{input_tolerance_pair[2]} !{input_tolerance_pair[0]} | sortgff > output.tmerge1.tolerance_!{input_tolerance_pair[1]}.support_!{input_tolerance_pair[2]}.gff
     '''
 }
 
@@ -75,13 +77,13 @@ process runGFFCompare {
 
     shell:
     '''
-    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -o !{input.baseName}.gffcompare !{input} -r !{sirvs_path}
+    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -o !{input.baseName}.gffcompare !{input} -r !{sirvs_path} -T
     '''
 }
 
 workflow {
     sirv = copyInputFiles(inputFiles) | processForSIRVs
-    output = sirv | combine(tolerances) | (runTmerge2 & runTmerge1) | mix
+    output = sirv | combine(tolerances) | combine(min_reads) | (runTmerge1 & runTmerge2) | mix
     sirv | mix(output) | gffToBED
     output | runGFFCompare
 }
