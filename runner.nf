@@ -5,8 +5,10 @@ include processForSIRVs as processTmerge2SIRVs from './utils'
 include processForSIRVs as processFLAIRSIRVs from './utils'
 include processForSIRVs as processStringtie2SIRVs from './utils'
 include runGFFCompare as oneVsTwo from './utils'
-include runGFFCompare as twoVsFLAIR from './utils'
-include runGFFCompare as twoVsStringTie2 from './utils'
+include runGFFCompare as FLAIRCompare from './utils'
+include runGFFCompare as StringTie2Compare from './utils'
+include runGFFCompare as tmerge2Compare from './utils'
+
 
 
 
@@ -26,6 +28,7 @@ flair_path = "/users/rg/jwindsor/flair"
 stringtie2_path = "/users/rg/jwindsor/stringtie2"
 julien_utils_path = "/users/rg/jlagarde/julien_utils/"
 read_mapping_path = "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/readMapping/"
+sirvs_path = "/users/rg/jlagarde/genomes/lexogen_SIRVs/SIRV_Set1_Lot00141_Sequences_181206a/SIRVome_isoforms_Lot00141_C_181206a.gtf.unix.corrected.gene_types.gtf"
 venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
 output_dir = "/users/rg/jwindsor/tests/tmerge/results"
 cache_dir = "/users/rg/jwindsor/tests/tmerge/cache"
@@ -220,16 +223,17 @@ workflow runTools {
         tmerge2 = runTmerge2(inputGFFs)
         tmerge2_sirvs = tmerge2.output | processTmerge2SIRVs
         recordTime(tmerge2.time)
-        // NOTE: All comparisons are done with SIRVs except tmerge1 vs tmerge2
+        // NOTE: All comparisons are done against SIRVs except tmerge1 vs tmerge2
         oneVsTwo(tmerge2.output, tmerge1.output)
+        tmerge2Compare(tmerge2_sirvs, sirvs_path)
 
         flair = gffToBED(inputGFFs) | runFLAIR
         flairGFF = bedToGFF(flair.output) | processFLAIRSIRVs
-        twoVsFLAIR(tmerge2_sirvs, flairGFF)
+        FLAIRCompare(flairGFF, sirvs_path)
 
         stringtie2 = runStringTie2(inputBAMs)
         stringtie2GFF = stringtie2.output | processStringtie2SIRVs
-        twoVsStringTie2(tmerge2_sirvs, stringtie2GFF)
+        StringTie2Compare(stringtie2GFF, sirvs_path)
     emit:
         tmerge1.output.mix(tmerge2.output).mix(flair.output).mix(stringtie2.output)
 }

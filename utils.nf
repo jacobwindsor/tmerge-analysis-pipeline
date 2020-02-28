@@ -30,3 +30,4 @@ process processForSIRVs {
     cat !{inputGFF} | awk -F"\t" '$1=="SIRVome_isoforms"' > !{inputGFF.baseName}.sirv.gff
     '''
 }
+
