@@ -14,7 +14,7 @@ process runGFFCompare {
 
     shell:
     '''
-    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -o !{input.simpleName}.!{input.baseName.split("\\\\.")[2]}_vs_!{reference.baseName.split("\\\\.")[2]}.gffcompare !{input} -r !{reference}
+    gffcompare --strict-match --no-merge -T -e 0 -d 0 --debug -o !{input.simpleName}.!{input.baseName.split("\\\\.")[2]}_vs_!{reference.baseName.split("\\\\.")[2]}.gffcompare !{input} -r !{reference}
     '''
 }
 

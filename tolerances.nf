@@ -13,8 +13,8 @@ include processForSIRVs from './utils'
 include gffToBED from './utils'
 
 inputFiles = Channel.from("/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Brain01Rep1.strandedHCGMs.gff.gz")
-tolerances = [0,2,4,6,8,9,10,11,12,13]
-min_reads = [0,1,2,3,4]
+tolerances = [2]
+min_reads = [1, 4]
 
 process copyInputFiles {
     input:
@@ -85,5 +85,5 @@ workflow {
     sirv = copyInputFiles(inputFiles) | processForSIRVs
     output = sirv | combine(tolerances) | combine(min_reads) | (runTmerge1 & runTmerge2) | mix
     sirv | mix(output) | gffToBED
-    output | runGFFCompare
+    // output | runGFFCompare
 }

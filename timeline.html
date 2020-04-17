@@ -1,0 +1,217 @@
+<!doctype html>
+<!--
+  ~ Copyright 2013-2019, Centre for Genomic Regulation (CRG)
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<html>
+<head>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<script type="text/javascript">
+var prot = (("https:" == document.location.protocol) ? "https://" : "http://");
+document.write(unescape("%3Cscript src='" + prot + "code.jquery.com/jquery-latest.min.js' type='text/javascript' %3E%3C/script%3E"));
+document.write(unescape("%3Cscript src='" + prot + "d3js.org/d3.v3.min.js' charset='utf-8' type='text/javascript' %3E%3C/script%3E"));
+document.write(unescape("%3Cscript src='" + prot + "cdn.rawgit.com/nextflow-io/d3-timeline/82622c4cc35bac7283b3a317826b0709ac1ae476/src/d3-timeline.js' type='text/javascript' %3E%3C/script%3E"));
+</script>
+<style type="text/css">
+* {
+  font-family: 'Lato', 'Helvetica Neue', Arial, Helvetica, sans-serif;
+}
+
+.axis path,
+.axis line {
+fill: none;
+  stroke: black;
+  shape-rendering: crispEdges;
+}
+
+.axis text {
+  font-size: 10px;
+}
+
+div#timeline g text {
+  font-size: 13px;
+}
+
+text.timeline-label {
+  font-size: 13px;
+}
+
+#timeline2 .axis {
+  transform: translate(0px,30px);
+  -ms-transform: translate(0px,30px); /* IE 9 */
+  -webkit-transform: translate(0px,30px); /* Safari and Chrome */
+  -o-transform: translate(0px,30px); /* Opera */
+  -moz-transform: translate(0px,30px); /* Firefox */
+}
+
+.coloredDiv {
+  height:20px; width:20px; float:left;
+}
+
+#footer {
+  padding-top: 3em; color: #bfbfbf; font-size: 13px;
+}
+
+#footer a:visited {
+  color: #bfbfbf;
+  text-decoration: underline;
+}
+</style>
+<script type="text/javascript">
+var handler=null;
+// see https://github.com/mbostock/d3/wiki/Ordinal-Scales#category20c
+var colors = d3.scale.category20c().domain(d3.range(0,20)).range()
+
+function c0(index) { return "#9c9c9c"; }
+function c1(index) { return "#bdbdbd"; }
+function c2(index) { return colors[index % 16]; } // <-- note: uses only the first 16 colors
+
+var elapsed="6m 46s"
+var beginningMillis=1583270701740;
+var endingMillis=1583271107951;
+var data=[
+{"label": "copyInputFiles (1)", "times": [{"starting_time": 1583270703411, "ending_time": 1583270737827, "color":c1(0)}, {"starting_time": 1583270737827, "ending_time": 1583270740317, "color":c2(0), "label": "1m 9s \/ 2.1 MB"}, {"starting_time": 1583270740317, "ending_time": 1583270772827, "color":c1(0)}]},
+{"label": "getBAM (1)", "times": [{"starting_time": 1583270703476, "ending_time": 1583270737841, "color":c1(1)}, {"starting_time": 1583270737841, "ending_time": 1583270848809, "color":c2(1), "label": "2m 54s \/ 1023.9 MB"}, {"starting_time": 1583270848809, "ending_time": 1583270877833, "color":c1(1)}]},
+{"label": "runTools:gffToBED (1)", "times": [{"starting_time": 1583270773284, "ending_time": 1583270807826, "color":c1(2)}, {"starting_time": 1583270807826, "ending_time": 1583270847126, "color":c2(2), "label": "2m 10s \/ 1.5 GB"}, {"starting_time": 1583270847126, "ending_time": 1583270902830, "color":c1(2)}]},
+{"label": "runTools:runTmerge2 (1)", "times": [{"starting_time": 1583270773355, "ending_time": 1583270807836, "color":c1(3)}, {"starting_time": 1583270807836, "ending_time": 1583270929760, "color":c2(3), "label": "2m 39s \/ 469 MB"}, {"starting_time": 1583270929760, "ending_time": 1583270932834, "color":c1(3)}]},
+{"label": "runTools:runTmerge1 (1)", "times": [{"starting_time": 1583270773551, "ending_time": 1583270807845, "color":c1(4)}, {"starting_time": 1583270807845, "ending_time": 1583270989961, "color":c2(4), "label": "4m 9s \/ 1.3 GB"}, {"starting_time": 1583270989961, "ending_time": 1583271022859, "color":c1(4)}]},
+{"label": "runTools:runStringTie2 (1)", "times": [{"starting_time": 1583270878078, "ending_time": 1583270898566, "color":c1(5)}, {"starting_time": 1583270898566, "ending_time": 1583270917209, "color":c2(5), "label": "54.9s \/ 17.6 MB"}, {"starting_time": 1583270917209, "ending_time": 1583270932937, "color":c1(5)}]},
+{"label": "runTools:runFLAIR (1)", "times": [{"starting_time": 1583270902969, "ending_time": 1583270933002, "color":c1(6)}, {"starting_time": 1583270933002, "ending_time": 1583270961167, "color":c2(6), "label": "1m 5s \/ 1.1 GB"}, {"starting_time": 1583270961167, "ending_time": 1583270967831, "color":c1(6)}]},
+{"label": "runTools:processTmerge2SIRVs (1)", "times": [{"starting_time": 1583270933205, "ending_time": 1583270967942, "color":c1(7)}, {"starting_time": 1583270967942, "ending_time": 1583270968120, "color":c2(7), "label": "34.7s \/ 1.5 MB"}]},
+{"label": "convertToBed:gffToBED (1)", "times": [{"starting_time": 1583270933276, "ending_time": 1583270968000, "color":c1(8)}, {"starting_time": 1583270968000, "ending_time": 1583270972107, "color":c2(8), "label": "34.7s \/ 236.1 MB"}]},
+{"label": "convertToBed:gffToBED (2)", "times": [{"starting_time": 1583270933343, "ending_time": 1583270968048, "color":c1(8)}, {"starting_time": 1583270968048, "ending_time": 1583270969414, "color":c2(8), "label": "34.7s \/ 34.5 MB"}]},
+{"label": "runTools:recordTime (1)", "times": [{"starting_time": 1583270933410, "ending_time": 1583270968078, "color":c1(9)}, {"starting_time": 1583270968078, "ending_time": 1583270969590, "color":c2(9), "label": "34.7s \/ 3.5 MB"}]},
+{"label": "runTools:processStringtie2SIRVs (1)", "times": [{"starting_time": 1583270933483, "ending_time": 1583270968112, "color":c1(10)}, {"starting_time": 1583270968112, "ending_time": 1583270968215, "color":c2(10), "label": "34.6s \/ 1.5 MB"}]},
+{"label": "runTools:bedToGFF (1)", "times": [{"starting_time": 1583270969961, "ending_time": 1583271002830, "color":c1(11)}, {"starting_time": 1583271002830, "ending_time": 1583271015196, "color":c2(11), "label": "1m 8s \/ 11.7 MB"}, {"starting_time": 1583271015196, "ending_time": 1583271037835, "color":c1(11)}]},
+{"label": "runTools:tmerge2Compare (1)", "times": [{"starting_time": 1583270970053, "ending_time": 1583271002839, "color":c1(12)}, {"starting_time": 1583271002839, "ending_time": 1583271003747, "color":c2(12), "label": "32.8s \/ 1.5 MB"}]},
+{"label": "runTools:StringTie2Compare (1)", "times": [{"starting_time": 1583270970123, "ending_time": 1583271003074, "color":c1(13)}, {"starting_time": 1583271003074, "ending_time": 1583271003921, "color":c2(13), "label": "33s \/ 1.5 MB"}]},
+{"label": "convertToBed:gffToBED (3)", "times": [{"starting_time": 1583271023388, "ending_time": 1583271057840, "color":c1(8)}, {"starting_time": 1583271057840, "ending_time": 1583271064007, "color":c2(8), "label": "34.5s \/ 414 MB"}]},
+{"label": "runTools:oneVsTwo (1)", "times": [{"starting_time": 1583271023445, "ending_time": 1583271057908, "color":c1(14)}, {"starting_time": 1583271057908, "ending_time": 1583271065799, "color":c2(14), "label": "34.5s \/ 215.4 MB"}]},
+{"label": "runTools:processFLAIRSIRVs (1)", "times": [{"starting_time": 1583271038057, "ending_time": 1583271072838, "color":c1(15)}, {"starting_time": 1583271072838, "ending_time": 1583271073044, "color":c2(15), "label": "34.8s \/ 2.1 MB"}]},
+{"label": "runTools:FLAIRCompare (1)", "times": [{"starting_time": 1583271073036, "ending_time": 1583271107838, "color":c1(16)}, {"starting_time": 1583271107838, "ending_time": 1583271107921, "color":c2(16), "label": "34.8s \/ 1.5 MB"}]}
+]
+
+
+function getTickFormat() {
+  var MIN = 1000 * 60
+  var HOUR = MIN * 60
+  var DAY = HOUR * 24
+  var delta = (endingMillis - beginningMillis)
+
+  if( delta < 2 * MIN ) {
+    return {
+      format: d3.time.format("%S"),
+      tickTime: d3.time.seconds,
+      tickInterval: 5,
+      tickSize: 6
+    }
+  }
+
+  if( delta < 2 * HOUR ) {
+    return {
+      format: d3.time.format("%M"),
+      tickTime: d3.time.minutes,
+      tickInterval: 5,
+      tickSize: 6
+    }
+  }
+
+  if( delta < 2 * DAY ) {
+    return {
+      format: d3.time.format("%H:%M"),
+      tickTime: d3.time.hours,
+      tickInterval: 1,
+      tickSize: 6
+    }
+  }
+
+  if( delta <= 7 * DAY ) {
+    return {
+      format: d3.time.format("%b %e %H:%M"),
+      tickTime: d3.time.hours,
+      tickInterval: 6,
+      tickSize: 6
+    }
+  }
+
+  return {
+    format: d3.time.format("%b %e"),
+    tickTime: d3.time.days,
+    tickInterval: 1,
+    tickSize: 6
+  }
+}
+
+function getLabelMargin(scale) {
+    $('<span class="labelSpan" style="display: none"></span>').appendTo('body');
+
+    var labelMargin = 0
+    $.each(data, function (key, value) {
+      labelMargin = Math.max(labelMargin, $('.labelSpan').html(value.label).width());
+    });
+
+    $('.labelSpan').remove();
+
+    return (labelMargin * scale);
+}
+
+function render() {
+  handler=null;
+  $("#timeline").empty()
+  $('#label_elapsed').text(elapsed)
+  $('#label_launch').text( d3.time.format('%d %b %Y %H:%M')(new Date(beginningMillis)) )
+
+  var width = $(window).width();
+  var chart = d3.timeline()
+    .stack() // toggles graph stacking
+    .margin({left:getLabelMargin(0.85), right:100, top:0, bottom:0})
+    .tickFormat( getTickFormat() )
+    .rowSeperators('#f5f5f5')
+    .showTimeAxisTick()
+    ;
+  var svg = d3.select("#timeline").append("svg").attr("width", width).datum(data).call(chart);
+}
+
+function hrz() {
+if( handler != null ) clearTimeout(handler)
+  handler = setTimeout(render, 150);
+}
+
+$(document).ready(render)
+$(window).resize(hrz); // resize the applet on window resize
+</script>
+</head>
+
+<body>
+<div>
+  <h3>Processes execution timeline</h3>
+  <p>
+    Launch time: <span id='label_launch'> </span><br>
+    Elapsed time: <span id='label_elapsed'> </span><br>
+    Legend: job wall time / memory usage (RAM) <span id='label_legend'> </span>
+  </p>
+  <div id="timeline"></div>
+</div>
+
+<div id='footer'>
+  Created with Nextflow -- <a href='http://www.nextflow.io' target='_blank'>http://nextflow.io</a>
+</div>
+
+<script type="text/javascript">
+var prot = (("https:" == document.location.protocol) ? "https://" : "http://");
+document.write(unescape("%3Clink href='" + prot + "fonts.googleapis.com/css?family=Lato' rel='stylesheet' type='text/css' %3E%3C/link%3E"));
+</script>
+</body>
+</html>
