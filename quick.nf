@@ -4,8 +4,9 @@ tmerge2_path = "/users/rg/jwindsor/tmerge/2.0"
 sirvs_path = "/users/rg/jwindsor/tests/tmerge/runner/data/SIRVome.gff"
 venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
 
-sensitivy_threshold = 96.4
-precision_threshold = 39.4
+// These are tmerge 1 values with minReadSupport = 4 and tolerance = 2
+sensitivy_threshold = 69.1
+precision_threshold = 87.0
 
 include gffToBED from './utils'
 
