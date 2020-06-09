@@ -11,186 +11,204 @@ nextflow.preview.dsl=2
 * Configuration options. 
 */
 // Options that are only used in this context
-tmerge2_path = "/users/rg/jwindsor/tmerge/2.0"
 tmerge1_path = "/users/rg/jlagarde/julien_utils"
 flair_path = "/users/rg/jwindsor/flair"
 stringtie2_path = "/users/rg/jwindsor/stringtie2"
 read_mapping_path = "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/readMapping/"
-sirvs_path = "/users/rg/jlagarde/genomes/lexogen_SIRVs/SIRV_Set1_Lot00141_Sequences_181206a/SIRVome_isoforms_Lot00141_C_181206a.gtf.unix.corrected.gene_types.gtf"
+sirvome_path = "/users/rg/jlagarde/genomes/lexogen_SIRVs/SIRV_Set1_Lot00141_Sequences_181206a/SIRVome_isoforms_Lot00141_C_181206a.gtf.unix.corrected.gene_types.gtf"
 venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
 
 // Options used by included files and this context
 params.output_dir = "/users/rg/jwindsor/tests/tmerge/results/compare"
 params.julien_utils_path = "/users/rg/jlagarde/julien_utils/"
+params.results_path = params.output_dir + "/results.csv"
 
-include processForSIRVs as processTmerge2SIRVs from './utils'
-include processForSIRVs as processFLAIRSIRVs from './utils'
-include processForSIRVs as processStringtie2SIRVs from './utils'
-include runGFFCompare as oneVsTwo from './utils'
-include runGFFCompare as FLAIRCompare from './utils'
-include runGFFCompare as StringTie2Compare from './utils'
-include runGFFCompare as tmerge2Compare from './utils'
-include gffToBED from './utils'
+// Remove time stats first
+new File(params.results_path).delete()  
 
-inputFiles = Channel.fromList([
-    [
-        "nickname": "standard",
-        "path": "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Brain01Rep1.strandedHCGMs.gff.gz"
-    ],
-    [
-        "nickname": "tricky",
-        "path": "/users/project/gencode_006070_no_backup/jlagarde/lncRNACapture_phase3/mappings/strandGffs/ont:Cshl:CapTrap:Corr0_HpreCap_0+_Heart01Rep1.stranded.gff.gz"
-    ]
-])
+// Run on all high confidence
+inputFiles = Channel.fromPath(
+    "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/*.gff.gz"
+    // "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Brain01Rep1.strandedHCGMs.gff.gz"
+).map { file -> tuple(file.simpleName, file) }
 
-process copyInputFiles {
+process getGFF {
     input:
-    val x
-
-    publishDir "$params.output_dir"
-
+    tuple ID, val(fileName)
+    
     output:
     path '*.input.gff'
 
     shell:
     '''
-    echo !{x.nickname}
-    zcat "!{x.path}" > !{x.nickname}.input.gff
+    zcat !{fileName} > !{ID}.input.gff
     '''    
+}
+
+process getBED {
+    input:
+    tuple ID, val(fileName)
+
+    memory "30G"
+
+    output:
+    path '*.input.bed'
+
+    shell:
+    '''
+    PATH="$PATH:!{params.julien_utils_path}"
+
+    zcat !{fileName} | gff2bed_full.pl -| sortbed > !{ID}.input.bed
+    '''
 }
 
 process getBAM {
     input:
-    val x
+    tuple ID, val(fileName)
 
-    publishDir "$params.output_dir"
     memory "30G"
 
     output:
     path '*.input.bam'
     
     shell:
-    if (x.nickname == "standard")
         '''
         PATH="$PATH:!{params.julien_utils_path}"
         module load SAMtools/1.5-foss-2016b;
 
         # select all read IDs (transcript_id's) from GTF:
-        zcat !{x.path} | extractGffAttributeValue.pl transcript_id | sort|uniq > tmp.ids
+        zcat !{fileName} | extractGffAttributeValue.pl transcript_id | sort|uniq > tmp.ids
         
         # extract SAM header from the BAM file (if you don't, the subsequent SAM->BAM conversion will not work):
-        samtools view -H !{read_mapping_path}$(basename !{x.path} .strandedHCGMs.gff.gz).bam > tmp.sam
+        samtools view -H !{read_mapping_path}!{ID}.bam > tmp.sam
 
         # extract SAM alignment records and filter them based on your list of read IDs.
-        samtools view "!{read_mapping_path}$(basename !{x.path} .strandedHCGMs.gff.gz).bam" | fgrep -w -f tmp.ids >> tmp.sam
+        samtools view "!{read_mapping_path}!{ID}.bam" | fgrep -w -f tmp.ids >> tmp.sam
 
         # convert SAM to BAM:
-        samtools view -b tmp.sam > !{x.nickname}.input.bam
+        samtools view -b tmp.sam > !{ID}.input.bam
         '''
 }
 
 process runTmerge1 {
+    // Run tmerge1 with default params
     input:
     path inputGFF
 
     memory '30 GB'
     time '25h'
-    publishDir "$params.output_dir"
 
     output:
-        path '*.output.tmerge1.gff', emit: output
-        path '*.time.tmerge1.txt', emit: time
+        tuple path('*.output.tmerge1.gff'), path('*.time.tmerge1.txt') // time file outputed as time(s),peak_mem(kb)
     
     shell:
     '''
     PATH="$PATH:!{params.julien_utils_path}"
-    /usr/bin/time -f "%e" -o !{inputGFF.simpleName}.time.tmerge1.txt perl !{tmerge1_path}/tmerge !{inputGFF} | sortgff > !{inputGFF.simpleName}.output.tmerge1.gff
+    /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge1.txt perl !{tmerge1_path}/tmerge --exonOverhangTolerance=2 --minReadSupport=4 !{inputGFF} | sortgff > !{inputGFF.simpleName}.output.tmerge1.gff
     '''
 }
 
 process runTmerge2 {
+    // Run tmerge2 with default params
     input:
     path inputGFF
 
     memory '30 GB'
-    publishDir "$params.output_dir"
 
     output:
-        path '*.output.tmerge2.gff', emit: output
-        path '*.time.tmerge2.txt', emit: time
+        tuple path('*.output.tmerge2.gff'), path('*.time.tmerge2.txt') // time file outputed as time(s),peak_mem(kb)
 
     shell:
     '''
     module load Python
     source !{venv}
 
-    /usr/bin/time -f "%e" -o !{inputGFF.simpleName}.time.tmerge2.txt python !{tmerge2_path}/tmerge.py -i !{inputGFF} -o !{inputGFF.simpleName}.output.tmerge2.gff
+    /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge2.txt tmerge -i !{inputGFF} -o !{inputGFF.simpleName}.output.tmerge2.gff --speed --tolerance=2 --min_read_support=4
     '''
 }
 
 process runFLAIR {
+    // default params (Tested on pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Brain01Rep1.input.gff (standard) to get best results)
     input:
     path inputBED
 
     memory '30GB'
-    publishDir "$params.output_dir"
+    errorStrategy 'ignore'
 
     output:
-        path '*.output.flair.bed', emit: output
-        path '*.time.flair.txt', emit: time
+        tuple path('*.output.flair.gff'), path('*.time.flair.txt') // time file outputed as time(s),peak_mem(kb)
 
     shell:
         '''
-        /usr/bin/time -f "%e" -o !{inputBED.simpleName}.time.flair.txt time python !{flair_path}/bin/collapse_isoforms_precise.py -q !{inputBED} -o !{inputBED.simpleName}.output.flair.bed
+        /usr/bin/time -f "%e,%M" -o !{inputBED.simpleName}.time.flair.txt time python !{flair_path}/bin/collapse_isoforms_precise.py -s 0.8 -q !{inputBED} -o tmp.bed
+        
+        # Convert to GFF
+        PATH="$PATH:!{params.julien_utils_path}"
+
+        cat tmp.bed | sortgff | awk -f !{params.julien_utils_path}bed12fields2gff.awk > !{inputBED.simpleName}.output.flair.gff
         '''
 }
 
 process runStringTie2 {
+    // Options used. Tested on pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Brain01Rep1.input.bam (standard) to get best results
+    // -L (long read mode)
+    // -t (disable trimming)
     input:
     path inputBAM
 
-    publishDir "$params.output_dir"
+    errorStrategy 'ignore'
 
     output:
-        path '*.output.stringtie2.gff', emit: output
-        path '*.time.stringtie2.txt', emit: time
+        tuple path('*.output.stringtie2.gff'), path('*.time.stringtie2.txt') // time file outputed as time(s),peak_mem(kb)
 
     shell:
     '''
     PATH="$PATH:!{params.julien_utils_path}"
-    /usr/bin/time -f "%e" -o !{inputBAM.simpleName}.time.stringtie2.txt time !{stringtie2_path}/stringtie -L -f 0 -a 1 !{inputBAM} -o !{inputBAM.simpleName}.output.stringtie2.tmp.gff
+    /usr/bin/time -f "%e,%M" -o !{inputBAM.simpleName}.time.stringtie2.txt time !{stringtie2_path}/stringtie -L !{inputBAM} -o !{inputBAM.simpleName}.output.stringtie2.tmp.gff
     cat !{inputBAM.simpleName}.output.stringtie2.tmp.gff | sortgff > !{inputBAM.simpleName}.output.stringtie2.gff
     '''
 }
 
-process bedToGFF {
+process recordResults {
+    // Append to CSV
+    // Columns:
+    // Type, dataset name, time (s), peak mem (kb), sensitivity (%), precision (%)
     input:
-    path inputBED
-
-    publishDir "$params.output_dir"
-
-    output:
-    path '*.gff'
-
+    tuple type, path(output), path(time), path(sensitivity), path(precision)
+    
     shell:
     '''
-    PATH="$PATH:!{params.julien_utils_path}"
+    touch !{params.results_path}
 
-    cat !{inputBED} | sortgff | awk -f !{params.julien_utils_path}bed12fields2gff.awk > !{inputBED.baseName}.gff
+    TIME="$(cat !{time} | tr -d '\n')"
+    PREC="$(cat !{precision} | tr -d '\n')"
+    SENS="$(cat !{sensitivity} | tr -d '\n')"
+
+    echo "!{type},!{output.simpleName},$TIME,$SENS,$PREC" >> !{params.results_path}
     '''
 }
 
-process recordTime {
+process addGFFCompare {
     input:
-    path tmerge2_time
+    tuple type, path(output), path(time)
+    
+    output:
+    tuple type, path(output), path(time), path("sensitivity.txt"), path("precision.txt")
 
     shell:
     '''
-    LAST_COMMIT_ID="$(cd !{tmerge2_path} && git log --format="%H" -n 1)"
+    # Retrieve only SIRVs
+    cat !{output} | awk -F"\t" '$1=="SIRVome_isoforms"' > sirvs.gff
 
-    TMERGE2_TIME="$(cat !{tmerge2_time} | tr -d '\n')"
+    # Run GFF compare
+    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -o tmp.gffcompare sirvs.gff  -r !{sirvome_path}
 
-    echo "$LAST_COMMIT_ID,!{tmerge2_time.simpleName},$TMERGE2_TIME" >> !{params.output_dir}/tmerge2_time_stats.csv
+    cat tmp.gffcompare
+
+    # Sensitivity
+    cat tmp.gffcompare | grep "Transcript level" | grep -Eo '[0-9]*\\.[0-9]*' | awk '{i++}i==1' > sensitivity.txt
+    # Precision
+    cat tmp.gffcompare | grep "Transcript level" | grep -Eo '[0-9]*\\.[0-9]*' | awk '{i++}i==2' > precision.txt
     '''
 }
 
@@ -199,35 +217,25 @@ workflow runTools {
     main:
         inputGFFs = inputFiles.filter(~/.*\.gff$/ )
         inputBAMs = inputFiles.filter( ~/.*\.bam$/ )
+        inputBEDs = inputFiles.filter( ~/.*\.bed$/ )
         
         tmerge1 = runTmerge1(inputGFFs)
         tmerge2 = runTmerge2(inputGFFs)
-        tmerge2_sirvs = tmerge2.output | processTmerge2SIRVs
-        recordTime(tmerge2.time)
-        // NOTE: All comparisons are done against SIRVs except tmerge1 vs tmerge2
-        oneVsTwo(tmerge2.output, tmerge1.output)
-        tmerge2Compare(tmerge2_sirvs, sirvs_path)
 
-        flair = gffToBED(inputGFFs) | runFLAIR
-        flairGFF = bedToGFF(flair.output) | processFLAIRSIRVs
-        FLAIRCompare(flairGFF, sirvs_path)
+        flair = runFLAIR(inputBEDs)
 
         stringtie2 = runStringTie2(inputBAMs)
-        stringtie2GFF = stringtie2.output | processStringtie2SIRVs
-        StringTie2Compare(stringtie2GFF, sirvs_path)
     emit:
-        tmerge1.output.mix(tmerge2.output).mix(flair.output).mix(stringtie2.output)
-}
-
-workflow convertToBed {
-    take: inputs
-    main:
-        gffToBED(inputs)
+        tmerge1.map { out -> tuple("tmerge1", out[0], out[1]) }
+            .mix(tmerge2.map { out -> tuple("tmerge2", out[0], out[1]) })
+            .mix(flair.map { out -> tuple("FLAIR", out[0], out[1]) })
+            .mix(stringtie2.map{ out -> tuple("StringTie2", out[0], out[1]) })
 }
 
 workflow {
-    inputs = copyInputFiles(inputFiles)
-        .mix(getBAM(inputFiles.filter { x -> x.nickname == "standard" })) // Only run for standard. Tricky doesnt work for getting BAM
-    outputs = runTools(inputs)
-    outputs.filter( ~/.*\.gff$/ ) | convertToBed
+    inputs = getGFF(inputFiles)
+        .mix(getBAM(inputFiles))
+        .mix(getBED(inputFiles))
+    
+    runTools(inputs) | addGFFCompare | recordResults
 }
