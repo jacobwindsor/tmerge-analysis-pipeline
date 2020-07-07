@@ -5,8 +5,8 @@ sirvs_path = "/users/rg/jwindsor/tests/tmerge/runner/data/SIRVome.gff"
 venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
 
 // These are tmerge 1 values with minReadSupport = 4 and tolerance = 2
-sensitivy_threshold = 69.1
-precision_threshold = 87.0
+sensitivity_threshold = 69
+precision_threshold = 87
 
 include gffToBED from './utils'
 
@@ -47,20 +47,18 @@ process checkSensitivityPrecision{
     executor "local"
 
     exec:
-    (transcript_level_row, precision, sensitivity) = (input =~ /.*Transcript level:\s*(\d*\.\d*)\s*\|\s*(\d*.\d*)/)[0]
+    (transcript_level_row, sensitivity, precision) = (input =~ /.*Transcript level:\s*(\d*\.\d*)\s*\|\s*(\d*.\d*)/)[0]
 
-    if ((Float.parseFloat(precision) < precision_threshold) || (Float.parseFloat(sensitivity) < sensitivy_threshold)) {
+    if ((Float.parseFloat(precision) < precision_threshold) || (Float.parseFloat(sensitivity) < sensitivity_threshold)) {
         throw new Exception("Sensitivity and/or precision are not above the required threshold. Sensitivity: $sensitivity, Precision: $precision")
     }
 }
 
 workflow.onComplete {
-    if (workflow.success) {
-        println "Pipeline completed in: $workflow.duration"
-    }
-    else {
-        println "Oops!"
-    }
+    report = file("/users/rg/jwindsor/tests/tmerge/runner/data/quick_output.txt")
+    report.append("${workflow.start}\n")
+    report.append("${workflow.duration}\n")
+    report.append("${ workflow.success ? 'OK' : 'failed' }\n")
 }
 
 workflow {
