@@ -26,11 +26,13 @@ params.results_path = params.output_dir + "/results.csv"
 // Remove time stats first
 new File(params.results_path).delete()  
 
-// Run on all high confidence
-inputFiles = Channel.fromPath(
-    "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/*.gff.gz"
+inputFiles = Channel.fromPath([
+    // Run on all high confidence
+    "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/*.gff.gz",
+    // Include the two raw pacbio sets with SIRVs
+    // "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/strandGffs/pacBio:Cshl:Smarter*.gff.gz"
     // "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Brain01Rep1.strandedHCGMs.gff.gz"
-).map { file -> tuple(file.simpleName, file) }
+]).map { file -> tuple(file.simpleName, file) }
 
 process getGFF {
     input:
@@ -45,6 +47,9 @@ process getGFF {
     '''    
 }
 
+/* 
+STEP 1a:
+ */
 process getBED {
     input:
     tuple ID, val(fileName)
@@ -91,12 +96,12 @@ process getBAM {
 }
 
 process runTmerge1 {
-    // Run tmerge1 with default params
     input:
     path inputGFF
 
     memory '30 GB'
-    time '25h'
+    time '10h'
+    errorStrategy 'ignore'
 
     output:
         tuple path('*.output.tmerge1.gff'), path('*.time.tmerge1.txt') // time file outputed as time(s),peak_mem(kb)
@@ -104,16 +109,16 @@ process runTmerge1 {
     shell:
     '''
     PATH="$PATH:!{params.julien_utils_path}"
-    /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge1.txt perl !{tmerge1_path}/tmerge --exonOverhangTolerance=2 --minReadSupport=4 !{inputGFF} | sortgff > !{inputGFF.simpleName}.output.tmerge1.gff
+    /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge1.txt perl !{tmerge1_path}/tmerge --exonOverhangTolerance=4 --minReadSupport=5 --endFuzz=1 !{inputGFF} | sortgff > !{inputGFF.simpleName}.output.tmerge1.gff
     '''
 }
 
 process runTmerge2 {
-    // Run tmerge2 with default params
     input:
     path inputGFF
 
     memory '30 GB'
+    errorStrategy 'ignore'
 
     output:
         tuple path('*.output.tmerge2.gff'), path('*.time.tmerge2.txt') // time file outputed as time(s),peak_mem(kb)
@@ -123,7 +128,26 @@ process runTmerge2 {
     module load Python
     source !{venv}
 
-    /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge2.txt tmerge -i !{inputGFF} -o !{inputGFF.simpleName}.output.tmerge2.gff --speed --tolerance=2 --min_read_support=4
+    /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge2.txt tmerge -i !{inputGFF} -o !{inputGFF.simpleName}.output.tmerge2.gff --tolerance=7 --end_fuzz=2 --min_read_support=1 --min_abundance=0.086
+    '''
+}
+
+process runTmerge2_splice_scoring {
+    input:
+    path inputGFF
+
+    memory '30 GB'
+    errorStrategy 'ignore'
+
+    output:
+        tuple path('*.output.tmerge2.gff'), path('*.time.tmerge2.txt') // time file outputed as time(s),peak_mem(kb)
+
+    shell:
+    '''
+    module load Python
+    source !{venv}
+    
+    /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge2.txt tmerge -i !{inputGFF} -o !{inputGFF.simpleName}.output.tmerge2.gff --tolerance=7 --end_fuzz=0 --min_read_support=1 --min_abundance=0 --splice_scoring --acceptor_path=/users/rg/jlagarde/projects/splice_sites/yeo_burge/Hsap.acceptor.mecoef --donor_path=/users/rg/jlagarde/projects/splice_sites/yeo_burge/Hsap.donor.mecoef --fasta_path=/users/rg/jwindsor/genomes/hg38.fa
     '''
 }
 
@@ -169,25 +193,6 @@ process runStringTie2 {
     '''
 }
 
-process recordResults {
-    // Append to CSV
-    // Columns:
-    // Type, dataset name, time (s), peak mem (kb), sensitivity (%), precision (%)
-    input:
-    tuple type, path(output), path(time), path(sensitivity), path(precision)
-    
-    shell:
-    '''
-    touch !{params.results_path}
-
-    TIME="$(cat !{time} | tr -d '\n')"
-    PREC="$(cat !{precision} | tr -d '\n')"
-    SENS="$(cat !{sensitivity} | tr -d '\n')"
-
-    echo "!{type},!{output.simpleName},$TIME,$SENS,$PREC" >> !{params.results_path}
-    '''
-}
-
 process addGFFCompare {
     input:
     tuple type, path(output), path(time)
@@ -212,6 +217,26 @@ process addGFFCompare {
     '''
 }
 
+
+process recordResults {
+    // Append to CSV
+    // Columns:
+    // Type, dataset name, time (s), peak mem (kb), sensitivity (%), precision (%)
+    input:
+    tuple type, path(output), path(time), path(sensitivity), path(precision)
+    
+    shell:
+    '''
+    touch !{params.results_path}
+
+    TIME="$(cat !{time} | tr -d '\n')"
+    PREC="$(cat !{precision} | tr -d '\n')"
+    SENS="$(cat !{sensitivity} | tr -d '\n')"
+
+    echo "!{type},!{output.simpleName},$TIME,$SENS,$PREC\n" >> !{params.results_path}
+    '''
+}
+
 workflow runTools {
     take: inputFiles
     main:
@@ -221,6 +246,7 @@ workflow runTools {
         
         tmerge1 = runTmerge1(inputGFFs)
         tmerge2 = runTmerge2(inputGFFs)
+        tmerge2_splice_scoring = runTmerge2_splice_scoring(inputGFFs)
 
         flair = runFLAIR(inputBEDs)
 
@@ -228,6 +254,7 @@ workflow runTools {
     emit:
         tmerge1.map { out -> tuple("tmerge1", out[0], out[1]) }
             .mix(tmerge2.map { out -> tuple("tmerge2", out[0], out[1]) })
+            .mix(tmerge2_splice_scoring.map { out -> tuple("tmerge2_splice_scoring", out[0], out[1]) })
             .mix(flair.map { out -> tuple("FLAIR", out[0], out[1]) })
             .mix(stringtie2.map{ out -> tuple("StringTie2", out[0], out[1]) })
 }
