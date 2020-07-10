@@ -9,7 +9,7 @@ params.output_dir = "/users/rg/jwindsor/tests/tmerge/results/options"
 
 // Just run with high confidence reads
 inputFiles = Channel.fromPath([
-    "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/*.gff.gz"
+    "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/*.gff.gz",
     "/users/rg/jlagarde/projects/encode/scaling/whole_genome/202006_lrgasp/mappings/highConfidenceReads/*.gff.gz"
 ]).map { file -> tuple(file.simpleName, file) }
 
