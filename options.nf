@@ -24,10 +24,11 @@ process getGFF {
     '''
     # If the file has SIRVs, use that for comparison for speed
     # Otherwise, compare to GENCODE v34
-    if grep -q "SIRVome_isoforms" !{fileName}; then
-        zcat !{fileName} | awk -F"\t" '$1=="SIRVome_isoforms"' > !{ID}_SIRVs.input.gff
+    zcat !{fileName} > tmp.gtf
+    if grep -q "SIRVome_isoforms" tmp.gtf; then
+        cat tmp.gtf | awk -F"\t" '$1=="SIRVome_isoforms"' > !{ID}_SIRVs.input.gff
     else
-        zcat !{fileName} > !{ID}.input.gff
+        cat tmp.gtf > !{ID}.input.gff
     fi
     '''    
 }
