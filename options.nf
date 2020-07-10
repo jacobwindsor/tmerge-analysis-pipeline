@@ -1,7 +1,6 @@
 nextflow.preview.dsl=2
 
-tmerge1_path = "/users/rg/jlagarde/julien_utils"
-sirvome_path = "/users/rg/jwindsor/genomes/SIRVome.gff"
+sirvome_path = "/users/rg/jwindsor/annotations/gencode.v34.annotation+SIRVs.exons.gtf"
 venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
 
 params.julien_utils_path = "/users/rg/jlagarde/julien_utils/"
@@ -70,7 +69,7 @@ process addGFFCompare {
     shell:
     '''
     # Run GFF compare
-    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -o tmp.gffcompare !{gff}  -r !{sirvome_path}
+    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -o tmp.gffcompare !{gff}  -r !{sirvome_path} -R
 
     cat tmp.gffcompare
 
