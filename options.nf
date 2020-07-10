@@ -7,10 +7,10 @@ params.julien_utils_path = "/users/rg/jlagarde/julien_utils/"
 params.output_dir = "/users/rg/jwindsor/tests/tmerge/results/options"
 
 
-// Just run with PacBio high confidence reads
+// Just run with high confidence reads
 inputFiles = Channel.fromPath([
     "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/*.gff.gz"
-    // "/users/rg/jlagarde/projects/encode/scaling/whole_genome/202006_lrgasp/mappings/highConfidenceReads/*.gff.gz"
+    "/users/rg/jlagarde/projects/encode/scaling/whole_genome/202006_lrgasp/mappings/highConfidenceReads/*.gff.gz"
 ]).map { file -> tuple(file.simpleName, file) }
 
 process getGFF {
@@ -22,8 +22,13 @@ process getGFF {
 
     shell:
     '''
-    # Retrieve only SIRVs
-    zcat !{fileName} | awk -F"\t" '$1=="SIRVome_isoforms"' > !{ID}.input.gff
+    # If the file has SIRVs, use that for comparison for speed
+    # Otherwise, compare to GENCODE v34
+    if grep -q "SIRVome_isoforms" !{fileName}; then
+        zcat !{fileName} | awk -F"\t" '$1=="SIRVome_isoforms"' > !{ID}_SIRVs.input.gff
+    else
+        zcat !{fileName} > !{ID}.input.gff
+    fi
     '''    
 }
 
@@ -98,11 +103,11 @@ process recordResults {
 }
 
 workflow {
-    min_lengths = [0,50,100,200,400]
-    tolerances = [0, 2, 4, 6, 8, 10, 12, 14, 16, 20]
-    isoform_fractions = [0, 0.01, 0.02, 0.04, 0.06, 0.086, 0.1, 0.2, 0.6, 1]
+    min_lengths = [0]
+    tolerances = [0, 2, 4, 6, 8, 10, 12, 16, 20]
+    isoform_fractions = [0, 0.01, 0.02, 0.04, 0.06, 0.09, 0.1, 0.2]
     fuzzs = [0, 1, 2, 4, 6, 8, 10]
-    supports = [1,2,4,6,8,10,14,18,20]
+    supports = [1, 2, 4, 6, 8, 10, 14, 20]
 
     // min_lengths = [0]
     // tolerances = [0]
