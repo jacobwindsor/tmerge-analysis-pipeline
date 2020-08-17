@@ -1,6 +1,6 @@
 nextflow.preview.dsl=2
 
-sirvome_path = "/users/rg/jwindsor/annotations/gencode.v34.annotation+SIRVs.exons.gtf"
+sirvome_path = "/users/rg/jwindsor/annotations/gencode/gencode.v34.annotation+SIRVs.exons.gtf"
 venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
 
 params.julien_utils_path = "/users/rg/jlagarde/julien_utils/"
@@ -75,9 +75,7 @@ process addGFFCompare {
     shell:
     '''
     # Run GFF compare
-    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -o tmp.gffcompare !{gff}  -r !{sirvome_path} -R
-
-    cat tmp.gffcompare
+    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -R -o tmp.gffcompare !{gff}  -r !{sirvome_path}
 
     # Sensitivity
     cat tmp.gffcompare | grep "Transcript level" | grep -Eo '[0-9]*\\.[0-9]*' | awk '{i++}i==1' > sensitivity.txt
@@ -105,10 +103,10 @@ process recordResults {
 
 workflow {
     min_lengths = [0]
-    tolerances = [0, 2, 4, 6, 8, 10, 12, 16, 20]
-    isoform_fractions = [0, 0.01, 0.02, 0.04, 0.06, 0.09, 0.1, 0.2]
+    tolerances = [0, 2, 4, 6, 10, 14, 20]
+    isoform_fractions = [0, 0.01, 0.02, 0.04, 0.05, 0.06, 0.08, 0.09, 0.2, 0.5, 1]
     fuzzs = [0, 1, 2, 4, 6, 8, 10]
-    supports = [1, 2, 4, 6, 8, 10, 14, 20]
+    supports = [1, 2, 4, 6, 10, 14, 20]
 
     // min_lengths = [0]
     // tolerances = [0]
@@ -124,5 +122,5 @@ workflow {
     support = combined | combine(supports) | runTmerge2_support
 
     isoform_fraction.mix(support) | addGFFCompare | recordResults \
-        | collectFile(name: "results.csv", newLine: false, storeDir: params.output_dir)
+        | collectFile(name: "results.csv", newLine: false, storeDir: params.output_dir, sort: false)
 }

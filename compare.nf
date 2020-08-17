@@ -15,23 +15,18 @@ tmerge1_path = "/users/rg/jlagarde/julien_utils"
 flair_path = "/users/rg/jwindsor/flair"
 stringtie2_path = "/users/rg/jwindsor/stringtie2"
 read_mapping_path = "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/readMapping/"
-sirvome_path = "/users/rg/jlagarde/genomes/lexogen_SIRVs/SIRV_Set1_Lot00141_Sequences_181206a/SIRVome_isoforms_Lot00141_C_181206a.gtf.unix.corrected.gene_types.gtf"
+sirvome_path = "/users/rg/jwindsor/annotations/SIRVome_isoforms_Lot00141_C_181206a.gtf.unix.corrected.gtf"
+gencode_path = "/users/rg/jwindsor/annotations/gencode/gencode.v34.annotation.gtf"
 venv = "/users/rg/jwindsor/venvs/tmerge2/bin/activate"
 
 // Options used by included files and this context
 params.output_dir = "/users/rg/jwindsor/tests/tmerge/results/compare"
 params.julien_utils_path = "/users/rg/jlagarde/julien_utils/"
-params.results_path = params.output_dir + "/results.csv"
-
-// Remove time stats first
-new File(params.results_path).delete()  
 
 inputFiles = Channel.fromPath([
     // Run on all high confidence
     "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/*.gff.gz",
-    // Include the two raw pacbio sets with SIRVs
-    // "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/strandGffs/pacBio:Cshl:Smarter*.gff.gz"
-    // "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Brain01Rep1.strandedHCGMs.gff.gz"
+    // "/users/rg/jlagarde/projects/encode/scaling/whole_genome/lncRNACapture_phase3/mappings/highConfidenceReads/pacBio:Cshl:Smarter:Corr0_HpreCap_0+_Heart01Rep1.strandedHCGMs.gff.gz"
 ]).map { file -> tuple(file.simpleName, file) }
 
 process getGFF {
@@ -127,8 +122,12 @@ process runTmerge2 {
     '''
     module load Python
     source !{venv}
-
-    /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge2.txt tmerge -i !{inputGFF} -o !{inputGFF.simpleName}.output.tmerge2.gff --tolerance=7 --end_fuzz=2 --min_read_support=1 --min_abundance=0.086
+    
+    if [[ !{inputGFF.simpleName} == *"pacBio"* ]]; then
+        /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge2.txt tmerge -i !{inputGFF} -o !{inputGFF.simpleName}.output.tmerge2.gff --pacbio
+    else
+        /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge2.txt tmerge -i !{inputGFF} -o !{inputGFF.simpleName}.output.tmerge2.gff --ont
+    fi
     '''
 }
 
@@ -147,7 +146,11 @@ process runTmerge2_splice_scoring {
     module load Python
     source !{venv}
     
-    /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge2.txt tmerge -i !{inputGFF} -o !{inputGFF.simpleName}.output.tmerge2.gff --tolerance=7 --end_fuzz=0 --min_read_support=1 --min_abundance=0 --splice_scoring --acceptor_path=/users/rg/jlagarde/projects/splice_sites/yeo_burge/Hsap.acceptor.mecoef --donor_path=/users/rg/jlagarde/projects/splice_sites/yeo_burge/Hsap.donor.mecoef --fasta_path=/users/rg/jwindsor/genomes/hg38.fa
+    if [[ !{inputGFF.simpleName} == *"pacBio"* ]]; then
+        /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge2.txt tmerge -i !{inputGFF} -o !{inputGFF.simpleName}.output.tmerge2.gff --pacbio --splice_scoring --acceptor_path=/users/rg/jlagarde/projects/splice_sites/yeo_burge/Hsap.acceptor.mecoef --donor_path=/users/rg/jlagarde/projects/splice_sites/yeo_burge/Hsap.donor.mecoef --fasta_path=/users/rg/jwindsor/genomes/hg38.fa
+    else
+        /usr/bin/time -f "%e,%M" -o !{inputGFF.simpleName}.time.tmerge2.txt tmerge -i !{inputGFF} -o !{inputGFF.simpleName}.output.tmerge2.gff --ont --splice_scoring --acceptor_path=/users/rg/jlagarde/projects/splice_sites/yeo_burge/Hsap.acceptor.mecoef --donor_path=/users/rg/jlagarde/projects/splice_sites/yeo_burge/Hsap.donor.mecoef --fasta_path=/users/rg/jwindsor/genomes/hg38.fa
+    fi
     '''
 }
 
@@ -164,7 +167,7 @@ process runFLAIR {
 
     shell:
         '''
-        /usr/bin/time -f "%e,%M" -o !{inputBED.simpleName}.time.flair.txt time python !{flair_path}/bin/collapse_isoforms_precise.py -s 0.8 -q !{inputBED} -o tmp.bed
+        /usr/bin/time -f "%e,%M" -o !{inputBED.simpleName}.time.flair.txt time python !{flair_path}/bin/collapse_isoforms_precise.py -q !{inputBED} -o tmp.bed
         
         # Convert to GFF
         PATH="$PATH:!{params.julien_utils_path}"
@@ -193,47 +196,72 @@ process runStringTie2 {
     '''
 }
 
-process addGFFCompare {
+process addGFFCompare_sirvs {
     input:
     tuple type, path(output), path(time)
     
     output:
-    tuple type, path(output), path(time), path("sensitivity.txt"), path("precision.txt")
+    tuple type, path(output), path(time), path("sensitivity_sirvs.txt"), path("precision_sirvs.txt")
 
     shell:
     '''
-    # Retrieve only SIRVs
-    cat !{output} | awk -F"\t" '$1=="SIRVome_isoforms"' > sirvs.gff
+    # extract only SIRVs
+    cat !{output} | awk -F"\t" '$1=="SIRVome_isoforms"' > sirvs.gff 
 
     # Run GFF compare
-    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -o tmp.gffcompare sirvs.gff  -r !{sirvome_path}
-
-    cat tmp.gffcompare
+    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -R -o tmp.gffcompare sirvs.gff -r !{sirvome_path}
 
     # Sensitivity
-    cat tmp.gffcompare | grep "Transcript level" | grep -Eo '[0-9]*\\.[0-9]*' | awk '{i++}i==1' > sensitivity.txt
+    cat tmp.gffcompare | grep "Transcript level" | grep -Eo '[0-9]*\\.[0-9]*' | awk '{i++}i==1' > sensitivity_sirvs.txt
     # Precision
-    cat tmp.gffcompare | grep "Transcript level" | grep -Eo '[0-9]*\\.[0-9]*' | awk '{i++}i==2' > precision.txt
+    cat tmp.gffcompare | grep "Transcript level" | grep -Eo '[0-9]*\\.[0-9]*' | awk '{i++}i==2' > precision_sirvs.txt
+    '''
+}
+
+process addGFFCompare_gencode {
+    input:
+    tuple type, path(output), path(time), path(sensitivity_sirvs), path(precision_sirvs)
+    
+    output:
+    tuple type, path(output), path(time), path(sensitivity_sirvs), path(precision_sirvs), path("sensitivity_gencode.txt"), path("precision_gencode.txt")
+
+    shell:
+    '''
+    # Run GFF compare
+    gffcompare --strict-match --no-merge -e 0 -d 0 --debug -R -o tmp.gffcompare !{output} -r !{gencode_path}
+
+    # Sensitivity
+    cat tmp.gffcompare | grep "Transcript level" | grep -Eo '[0-9]*\\.[0-9]*' | awk '{i++}i==1' > sensitivity_gencode.txt
+    # Precision
+    cat tmp.gffcompare | grep "Transcript level" | grep -Eo '[0-9]*\\.[0-9]*' | awk '{i++}i==2' > precision_gencode.txt
     '''
 }
 
 
+
 process recordResults {
     // Append to CSV
-    // Columns:
-    // Type, dataset name, time (s), peak mem (kb), sensitivity (%), precision (%)
     input:
-    tuple type, path(output), path(time), path(sensitivity), path(precision)
+    tuple type, path(output), path(time), path(sensitivity_sirvs), path(precision_sirvs), path(sensitivity_gencode), path(precision_gencode)
     
+    output:
+    path 'tmp.csv'
+
     shell:
     '''
-    touch !{params.results_path}
-
     TIME="$(cat !{time} | tr -d '\n')"
-    PREC="$(cat !{precision} | tr -d '\n')"
-    SENS="$(cat !{sensitivity} | tr -d '\n')"
+    PREC_SIRV="$(cat !{precision_sirvs} | tr -d '\n')"
+    SENS_SIRV="$(cat !{sensitivity_sirvs} | tr -d '\n')"
+    PREC_GENCODE="$(cat !{precision_gencode} | tr -d '\n')"
+    SENS_GENCODE="$(cat !{sensitivity_gencode} | tr -d '\n')"
 
-    echo "!{type},!{output.simpleName},$TIME,$SENS,$PREC\n" >> !{params.results_path}
+    # If the file has SIRVs, flag it
+    SIRVS="FALSE"
+    if grep -q "SIRVome_isoforms" !{output} ; then
+        SIRVS="TRUE"
+    fi
+
+    echo "!{type},!{output.simpleName},$SIRVS,$TIME,$SENS_SIRV,$PREC_SIRV,$SENS_GENCODE,$PREC_GENCODE" > tmp.csv
     '''
 }
 
@@ -264,5 +292,6 @@ workflow {
         .mix(getBAM(inputFiles))
         .mix(getBED(inputFiles))
     
-    runTools(inputs) | addGFFCompare | recordResults
+    runTools(inputs) | addGFFCompare_sirvs | addGFFCompare_gencode | recordResults \
+        | collectFile(name: "results.csv", newLine: false, storeDir: params.output_dir, sort: false)
 }
